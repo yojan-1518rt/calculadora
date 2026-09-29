@@ -1,0 +1,185 @@
+import math
+
+
+def solicitar_flotante(mensaje, valor_defecto):
+    """Solicita un valor numérico al usuario con opción de usar valor por defecto."""
+    entrada = input(f"{mensaje} [Por defecto: {valor_defecto}]: ").strip()
+    if entrada == "":
+        return valor_defecto
+    try:
+        return float(entrada)
+    except ValueError:
+        print("Entrada no válida. Se usará el valor por defecto.")
+        return valor_defecto
+
+
+def ejecutar_calculadora():
+    print("==================================================")
+    print("  CALCULADORA DE DISEÑO Y CINÉTICA DE COMPOSTERA  ")
+    print("==================================================\n")
+
+    # ----------------------------------------------------
+    # ENTRADA DE DATOS
+    # ----------------------------------------------------
+    print("--- 1. PARÁMETROS DEL RECIPIENTE Y MATERIALES ---")
+    v_recipiente = solicitar_flotante(
+        "Capacidad total del recipiente (V_recipiente) en Litros", 10.0
+    )
+    f_espacio = solicitar_flotante(
+        "Fracción de espacio libre superior (f_espacio, ej: 0.15 para 15%)",
+        0.15,
+    )
+    rho_verde = solicitar_flotante(
+        "Densidad de residuos verdes/cocina (rho_verde) en kg/L", 0.55
+    )
+    rho_cafe = solicitar_flotante(
+        "Densidad de estructurante seco/café (rho_cafe) en kg/L", 0.18
+    )
+
+    print("\n--- 2. PARÁMETROS DE HUMEDAD ---")
+    h_verde = solicitar_flotante(
+        "Humedad de residuos verdes (H_verde, ej: 0.80 para 80%)", 0.80
+    )
+    h_cafe = solicitar_flotante(
+        "Humedad de estructurante seco (H_cafe, ej: 0.12 para 12%)", 0.12
+    )
+    h_objetivo = solicitar_flotante(
+        "Humedad objetivo para la mezcla (H_objetivo)", 0.58
+    )
+
+    print("\n--- 3. PARÁMETROS QUÍMICOS (C/N) ---")
+    c_verde = solicitar_flotante(
+        "Porcentaje de Carbono en residuo verde (%C_verde en decimal, ej: 0.45)",
+        0.45,
+    )
+    n_verde = solicitar_flotante(
+        "Porcentaje de Nitrógeno en residuo verde (%N_verde en decimal, ej: 0.025)",
+        0.025,
+    )
+    c_cafe = solicitar_flotante(
+        "Porcentaje de Carbono en estructurante seco (%C_cafe en decimal, ej: 0.50)",
+        0.50,
+    )
+    n_cafe = solicitar_flotante(
+        "Porcentaje de Nitrógeno en estructurante seco (%N_cafe en decimal, ej: 0.001)",
+        0.001,
+    )
+
+    print("\n--- 4. PARÁMETROS CINÉTICOS Y DENSIDAD FINAL ---")
+    dia_evaluar = solicitar_flotante(
+        "Día del proceso a consultar para cinética (t en días, 1 a 30)", 30.0
+    )
+    rho_activo = solicitar_flotante(
+        "Densidad de compost activo/maduro (rho_activo) en kg/L", 0.80
+    )
+    f_perdida = solicitar_flotante(
+        "Fracción de pérdida de masa acumulada al día 30 (f_perdida)", 0.40
+    )
+
+    # ----------------------------------------------------
+    # CÁLCULOS
+    # ----------------------------------------------------
+
+    # Ecuación 1: Volumen Útil
+    v_util = v_recipiente * (1 - f_espacio)
+
+    # Ecuación 2: Densidad Inicial Ponderada
+    rho_mezcla = (rho_verde + (2 * rho_cafe)) / 3.0
+
+    # Ecuación 3: Masas Iniciales
+    m_total = v_util * rho_mezcla
+    m_verde = v_recipiente * (((1 - f_espacio) * rho_verde) / 3.0)
+    m_cafe = v_recipiente * (((2 * (1 - f_espacio)) * rho_cafe) / 3.0)
+
+    # Ecuación 4: Humedad Inicial y Agua de Ajuste
+    h_mezcla = ((m_verde * h_verde) + (m_cafe * h_cafe)) / m_total
+    if h_mezcla < h_objetivo:
+        w_agua = (m_total * (h_objetivo - h_mezcla)) / (1 - h_objetivo)
+    else:
+        w_agua = 0.0
+
+    # Ecuación 5: Balance Carbono/Nitrógeno
+    m_seca_verde = m_verde * (1 - h_verde)
+    m_seca_cafe = m_cafe * (1 - h_cafe)
+    c_total = (m_seca_verde * c_verde) + (m_seca_cafe * c_cafe)
+    n_total = (m_seca_verde * n_verde) + (m_seca_cafe * n_cafe)
+    cn_mezcla = c_total / n_total if n_total > 0 else 0.0
+
+    # Ecuación 6: Cinética de Masa en el Día t
+    t = dia_evaluar
+    if t <= 3:
+        k = 0.04
+    elif t <= 15:
+        k = 0.10
+    elif t <= 22:
+        k = 0.03
+    else:
+        k = 0.008
+
+    m_t = m_total * math.exp(-k * t)
+
+    # Ecuación 7: Transición de Densidad al Día t
+    k_rho = 0.08
+    rho_t = rho_mezcla + (rho_activo - rho_mezcla) * (1 - math.exp(-k_rho * t))
+
+    # Ecuación 8: Volumen Ocupado al Día t
+    v_t = m_t / rho_t
+
+    # Ecuación 9: Cosecha Final (Día 30)
+    m_final = m_total * (1 - f_perdida)
+    v_final = m_final / rho_activo
+
+    # ----------------------------------------------------
+    # IMPRESIÓN DE RESULTADOS (SIN TABLAS)
+    # ----------------------------------------------------
+    print("\n==================================================")
+    print("             RESULTADOS DEL CÁLCULO               ")
+    print("==================================================")
+
+    print("\n[DIMENSIONAMIENTO DE CARGA INICIAL]")
+    print(f"Volumen útil de trabajo (V_útil): {v_util:.3f} Litros")
+    print(
+        f"Densidad aparente inicial de la mezcla (rho_mezcla): {rho_mezcla:.3f} kg/L"
+    )
+    print(f"Masa total inicial a cargar (M_total): {m_total:.3f} kg")
+    print(f"Masa de residuos verdes de cocina (M_verde): {m_verde:.3f} kg")
+    print(f"Masa de estructurante seco (M_cafe): {m_cafe:.3f} kg")
+
+    print("\n[BALANCES FISICOQUÍMICOS]")
+    print(
+        f"Humedad inicial calculada (H_mezcla): {h_mezcla * 100:.2f}% ({h_mezcla:.4f})"
+    )
+    if w_agua > 0:
+        print(
+            f"Agua de ajuste requerida para alcanzar el {h_objetivo * 100:.0f}% (W_agua): {w_agua:.3f} Litros"
+        )
+    else:
+        print(
+            "Agua de ajuste requerida (W_agua): 0.000 Litros (Humedad inicial suficiente)"
+        )
+
+    print(f"Relación Carbono/Nitrógeno obtenida (C/N_mezcla): {cn_mezcla:.2f}:1")
+    if 25 <= cn_mezcla <= 30:
+        print("Estado de C/N: ÓPTIMO (Dentro del rango 25:1 a 30:1)")
+    else:
+        print(
+            "Estado de C/N: FUERA DE RANGO ÓPTIMO (Se sugiere ajustar proporción de secos)"
+        )
+
+    print(f"\n[ESTADO CINÉTICO AL DÍA {t:.0f}]")
+    print(f"Constante de descomposición aplicada (k): {k} día^-1")
+    print(f"Masa remanente en el día {t:.0f} (M(t)): {m_t:.3f} kg")
+    print(f"Densidad aparente en el día {t:.0f} (rho(t)): {rho_t:.3f} kg/L")
+    print(
+        f"Volumen ocupado en el contenedor en el día {t:.0f} (V(t)): {v_t:.3f} Litros"
+    )
+
+    print("\n[PROYECTADO DE COSECHA FINAL (DÍA 30)]")
+    print(f"Masa final de compost obtenida (M_final): {m_final:.3f} kg")
+    print(f"Volumen final de compost cosechado (V_final): {v_final:.3f} Litros")
+    print("==================================================")
+
+
+# Ejecución del programa
+if __name__ == "__main__":
+    ejecutar_calculadora()
